@@ -1,0 +1,153 @@
+---
+title: "Growth_Curve_ggplot2"
+author: "Owen S."
+date: "2025-08-07"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+#Start by setting working directory. The following two lines select a folder on your
+#laptop to pull data from and save plots to.
+getwd
+setwd("C:/Users/owens/OneDrive/Desktop/Sherbo Lab/Final_Paper_Data")
+
+#Load in .csv files. Name them however you would like, but copy the format below
+
+first_OD600 <- read.csv("10_28_OD600_Raw.csv")
+june_OD600 <- read.csv("6_6_Raw_OD600.csv")
+
+#Load libraries. Each contains stats packages and helpful tools for plots
+library("tidyverse")
+library("sciplot")
+library(car)
+library(ggpmisc)
+library("rlang")
+```
+
+```{r}
+# Load ggplot2 library
+library(ggplot2)
+
+# Define custom colors (we like using these)
+customcolors <- c('#A4CFCB', '#A0B7B6', '#A3A3A4', '#A49397', '#A68189', '#A7717E', '#A85A71', '#994963')
+
+# Set custom colors as the default scale
+custom_color_scale <- scale_color_manual(values = customcolors)
+
+# Example plot using the custom colors
+ggplot(mtcars, aes(x = mpg, y = hp, color = factor(cyl))) +
+  
+  #point size is equal to 3
+  geom_point(size = 3) +
+  
+  custom_color_scale +
+  
+  theme_minimal()
+
+
+
+```
+
+```{r}
+#Code for making growth curves
+
+
+#Mutating data to create rows with just the means for each strain's OD600 at every time point
+june_OD600 = june_OD600 %>%
+  
+  #Gets rid of NA or other OD600 values that are not needed (like empty wells after collection)
+  mutate(across(where(is.numeric), ~ ifelse(. < 0.101 & . != 0, NA, .))) %>%
+  
+  #Start creating groups of data for each strain and calculating means.
+  #I am specifically listing rows from my own .csv files I want to be averaged 
+  #I call these by using the (2:6) like format. 
+  mutate(GJ10 = rowMeans(across(c(2:6, 12:16, 22:26)), na.rm = TRUE),
+         pOMS005 = rowMeans(across(c(32:36, 42:46, 52:56)), na.rm = TRUE),
+         pBFL001 = rowMeans(across(c(7:11, 17:21, 27:31)), na.rm = TRUE),
+         pOMS003 = rowMeans(across(c(37:41, 47:51, 57:61)), na.rm = TRUE))
+library("ggrepel")
+
+
+
+#Selecting what columns I would like for the plot and renaming them into new groups
+june_OD600 %>%
+  select(Time, pOMS005, GJ10) %>% #no pOMS003, pBFL001
+  pivot_longer(
+    cols = c(pOMS005, GJ10),
+    names_to = "Xa_Strains", # New column for the original column names
+    values_to = "Xa_OD600"   # New column for all OD600 measurements
+  ) %>%
+  
+  
+  
+  
+  #Below comments would be for calculating standard error
+  
+  #mutate(se = sd(OD600)/3,
+  #          se = ifelse(Strains == "GJ10", sd(OD600)/5.3852, se)) %>%
+  
+  
+  
+
+  #Calculating standard deviation
+  mutate(sd = sd(Xa_OD600),
+         sd = ifelse(Xa_Strains == "GJ10", sd(Xa_OD600), sd)) %>%
+  
+  
+  
+  #Calling plot with ggplot. Geom_line is a line graph that connect all data points
+  ggplot(aes(x = Time, y = Xa_OD600, color = Xa_Strains)) +
+  geom_line() +
+  
+  #Adding error bars. width is how thin these lines are, alpha is how bold or transparent
+  #remove the "color" command to have error bars colored by their assigned code (pink or blue in this case)
+   geom_errorbar(aes(ymin = Xa_OD600 - sd,
+                    ymax = Xa_OD600 + sd
+                    ), width = 0.3, alpha = 0.4, color = "black") +
+
+  #point size, colors, and scale of axes below
+  geom_point(size = 1.2) +
+  scale_color_manual(values = c("#A0B7B6", '#A7717E')) +
+  scale_x_continuous(breaks = seq(0, 48, by = 8)) + # Automatically set 6 ticks on the x-axis
+  scale_y_continuous(breaks = seq(0, 0.7, by = 0.1)) + # Manually set ticks on the y-axis
+  
+  #Minimal theme and all commands below are to set up our preferred plot styles
+  theme_minimal() +
+  theme(#axis.title = element_text(size = 17),
+        #axis.text  = element_text(size  = 17),
+        axis.title = element_blank(), # Remove axis titles
+        axis.text = element_blank(), #remove text from tick marks
+        plot.title = element_text(size = 19),
+        panel.grid = element_blank(),
+        #axis.line = element_line(color = "black", linewidth = 1.5),
+        legend.position = "none", #no legend
+        panel.background = element_blank(), # Remove panel background
+        panel.border = element_rect(color = "black", fill = NA, linewidth = 1.5), # Frame thickness
+        axis.ticks = element_line(linewidth = 1.0), # Tick thickness
+        axis.ticks.length = unit(5, "mm"),
+        plot.margin = margin(t = 10, r = 10, b = 50, l = 80, unit = "pt")) 
+
+
+#Below are extra commands to add text if/when needed
+  #geom_label(aes(x = 0.2, y = 0.63, label = "Wild-Type")) +
+  #geom_label(aes(x = 0.2, y = 0.57, label = "pOMS005"), color = "#A68189") +
+  #labs(x = expression(italic("t") ~ "(h)"), y = expression(italic("optical density") ~ "(a.u.)"),  
+       #labs(title = expression(italic("Xanthobacter autotrophicus") ~ 
+                            #"Growth over Six Hours: pOMS005 vs. GJ10")) 
+
+
+
+#These lines set the plot margins up for our style
+plot_width <- 350 / 72 # Convert from pixels to inches assuming 96 DPI
+plot_height <- 300 / 72
+
+
+
+#this line of code saves the plot to your working directory (aka the folder where your data is)
+#This line will also save over plots of the same name. Good to update plots, but be careful!!
+ggsave("june_growth_two_strains.jpg", width = plot_width, height = plot_height, dpi = 300)
+  
+```
+
